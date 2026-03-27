@@ -3,34 +3,47 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import './LandingPage.scss';
 
+// --- A MAGIA DO VITE ACONTECE AQUI ---
+// import.meta.glob cria um mapa de todas as imagens nas subpastas de assets/cards.
+// O 'eager: true' carrega as referências imediatamente.
+const imagesMap = import.meta.glob('../../assets/cards/**/*.png', { eager: true });
+
 function LandingPage() {
     const navigate = useNavigate();
     const [card, setCard] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [cardImageUrl, setCardImageUrl] = useState(null);
 
     useEffect(() => {
-        // Vamos buscar o Luffy ST10-001 como exemplo de anatomia
+        // Vamos buscar o Luffy ST10-001 como exemplo
         axios.get('http://localhost:8080/api/cards/code/ST10-001')
             .then(res => {
-                setCard(res.data);
+                const cardData = res.data;
+                setCard(cardData);
+
+                // --- LÓGICA DE DETEÇÃO DA IMAGEM ---
+                if (cardData.setId && cardData.imageName) {
+                    // Construímos o caminho relativo que o Vite entende internamente
+                    // Ex: ../../assets/cards/ST10/ST10-001.png
+                    const expectedPath = `../../assets/cards/${cardData.setId}/${cardData.imageName}`;
+
+                    // Verificamos se este caminho existe no nosso mapa de imagens
+                    if (imagesMap[expectedPath]) {
+                        // Se existir, pegamos no URL final gerado pelo Vite
+                        setCardImageUrl(imagesMap[expectedPath].default);
+                    } else {
+                        console.error("❌ Imagem não encontrada no mapa do Vite:", expectedPath);
+                        // Opcional: define uma imagem de erro/placeholder
+                        setCardImageUrl(null);
+                    }
+                }
                 setLoading(false);
             })
             .catch(err => {
-                console.error("Erro ao carregar carta:", err);
+                console.error("❌ Erro ao carregar carta:", err);
                 setLoading(false);
             });
     }, []);
-
-    // Função vital para carregar a imagem da pasta correta do Set
-    const getCardImage = (setId, imageName) => {
-        if (!setId || !imageName) return null;
-        try {
-            // Procura em src/assets/cards/[SET]/[CODE].png
-            return new URL(`../../assets/cards/${setId}/${imageName}`, import.meta.url).href;
-        } catch (e) {
-            return null;
-        }
-    };
 
     const scrollToAnatomy = () => {
         document.getElementById('anatomy-section')?.scrollIntoView({ behavior: 'smooth' });
@@ -68,19 +81,30 @@ function LandingPage() {
                         </div>
                     </div>
 
-                    {/* CARTA CENTRAL COM IMAGEM LOCAL */}
+                    {/* CARTA CENTRAL COM IMAGEM LOCAL CORRIGIDA */}
                     <div className="central-card-anatomy" onClick={() => navigate('/catalog')}>
                         <div className="card-frame">
-                            {card ? (
+                            {loading ? (
+                                <div className="placeholder-content">Navegando...</div>
+                            ) : cardImageUrl ? (
                                 <img
-                                    src={getCardImage(card.setId, card.imageName)}
-                                    alt={card.name}
+                                    src={cardImageUrl}
+                                    alt={card?.name || 'Carta'}
                                     className="card-image"
-                                    onError={(e) => e.target.style.display = 'none'}
+                                    onError={(e) => {
+                                        console.error("Falha ao carregar o URL da imagem:", cardImageUrl);
+                                        e.target.style.display = 'none';
+                                        e.target.nextSibling.style.display = 'flex';
+                                    }}
                                 />
-                            ) : (
-                                <div className="placeholder-content">Carregando...</div>
-                            )}
+                            ) : null}
+
+                            {/* Placeholder caso a imagem falhe */}
+                            <div className="placeholder-content" style={{ display: (cardImageUrl || loading) ? 'none' : 'flex' }}>
+                                <span>Carta Não Encontrada</span>
+                                {card && <small>{card.setId}/{card.imageName}</small>}
+                            </div>
+
                             <div className="cost-overlay">{card?.cost ?? '10'}</div>
                         </div>
                         <div className="hover-hint">Ver no Catálogo →</div>

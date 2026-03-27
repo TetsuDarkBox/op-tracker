@@ -40,6 +40,7 @@ public class CardController {
 
                     response.put("setId", setId);
                     // Nome do ficheiro limpo (igual ao que o Downloader usou)
+                    // Garante que termina em .png
                     String fileName = card.getCode().replaceAll("[\\\\/:*?\"<>|]", "-") + ".png";
                     response.put("imageName", fileName);
 
