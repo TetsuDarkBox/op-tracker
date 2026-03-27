@@ -1,0 +1,76 @@
+$primary-red: #ff4757;
+$gold: #ffa502;
+$glass: rgba(10, 10, 10, 0.9);
+
+.landing-viewport {
+  width: 100%;
+  min-height: 100vh;
+  background: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.6)),
+  url('../../assets/backgrounds/hq720.jpg') no-repeat center center/cover;
+  background-attachment: fixed;
+
+  .hero-section {
+    height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    .hero-title { font-size: 100px; font-weight: 900; color: white; margin: 0; }
+    .hero-subtitle { color: rgba(255,255,255,0.8); margin-bottom: 30px; }
+  }
+
+  .anatomy-section {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    background: #050505;
+    padding: 100px 0;
+
+    .anatomy-container {
+      position: relative;
+      width: 1100px; height: 750px;
+      display: flex; align-items: center; justify-content: center;
+
+      .central-card-anatomy {
+        width: 350px; height: 490px;
+        position: relative; z-index: 5;
+        cursor: pointer; transition: 0.4s ease;
+
+        .card-frame {
+          width: 100%; height: 100%;
+          border-radius: 15px; overflow: hidden;
+          box-shadow: 0 0 50px rgba(255, 165, 2, 0.2);
+          border: 1px solid rgba(255,255,255,0.1);
+          background: #111;
+
+          .card-image { width: 100%; height: 100%; object-fit: cover; }
+          .cost-overlay {
+            position: absolute; top: 15px; left: 15px;
+            width: 45px; height: 45px; background: white; color: black;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-weight: 900; font-size: 22px;
+          }
+        }
+        &:hover { transform: scale(1.03); }
+      }
+
+      .annotation-group {
+        position: absolute; display: flex; align-items: center;
+        .box {
+          background: $glass; padding: 15px; border-radius: 8px; width: 220px;
+          border-left: 4px solid $gold;
+          h4 { color: $gold; margin: 0 0 5px 0; font-size: 0.9rem; text-transform: uppercase; }
+          p { color: #ccc; margin: 0; font-size: 0.85rem; }
+        }
+        .line { height: 2px; background: rgba($gold, 0.4); width: 80px; }
+      }
+
+      // POSICIONAMENTO
+      .cost-ref { top: 50px; left: 50px; .line { transform: rotate(20deg); } }
+      .name-ref { top: 50px; right: 50px; flex-direction: row-reverse; .line { transform: rotate(-20deg); } }
+      .attribute-ref { left: 20px; .line { width: 120px; } }
+      .power-ref { bottom: 150px; right: 20px; flex-direction: row-reverse; .line { width: 120px; } }
+      .effect-ref {
+        bottom: -20px; flex-direction: column-reverse;
+        .line { height: 80px; width: 2px; margin-top: 10px; }
+        .box { width: 450px; text-align: center; border-left: none; border-top: 4px solid $gold; }
+      }
+    }
+  }
+}

@@ -1,9 +1,9 @@
 package com.optracker.api.controller;
 
-import com.optracker.api.dto.LoginRequest;
-import com.optracker.api.dto.LoginResponse;
+import com.optracker.api.dto.LoginRequestDTO;
+import com.optracker.api.dto.LoginResponseDTO;
 import com.optracker.api.dto.UserResponseDTO;
-import com.optracker.api.controller.request.RegisterRequest;
+import com.optracker.api.dto.RegisterRequest;
 import com.optracker.api.entity.User;
 import com.optracker.api.service.UserService;
 import org.springframework.http.HttpStatus;
@@ -45,8 +45,13 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
-        LoginResponse response = userService.authenticate(request.username(), request.password());
+    public ResponseEntity<LoginResponseDTO> login(@RequestBody LoginRequestDTO request) {
+        LoginResponseDTO response = userService.authenticate(request.username(), request.password());
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/test")
+    public ResponseEntity<String> test() {
+        return ResponseEntity.ok("Ligação estabelecida! 🏴‍☠️");
     }
 }

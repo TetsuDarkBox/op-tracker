@@ -25,15 +25,17 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     @Override
-    public void run(String... args) throws Exception {
-        System.out.println("🚀 A VERIFICAR A BASE DE DADOS...");
+    public void run(String... args) {
+        long cardCount = cardRepository.count();
 
-        List<Card> newCards = bandaiScraperService.scrapeOfficialSite();
-
-        if (newCards != null && !newCards.isEmpty()) {
-            System.out.println("⏳ A gravar " + newCards.size() + " cartas no TiDB Cloud...");
-            cardRepository.saveAll(newCards);
-            System.out.println("🏁 SUCESSO! Base de dados atualizada.");
+        if (cardCount > 0) {
+            System.out.println("✅ " + cardCount + " cartas encontradas. API disponível de imediato!");
+            // Opcional: podes chamar o scraper aqui na mesma para atualizar,
+            // mas como é @Async, ele não vai bloquear o arranque.
+            return;
         }
+
+        System.out.println("🚀 Base de dados vazia. A iniciar scraper em background...");
+        bandaiScraperService.scrapeOfficialSite();
     }
 }

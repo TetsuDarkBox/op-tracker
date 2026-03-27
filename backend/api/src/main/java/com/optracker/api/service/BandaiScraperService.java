@@ -9,6 +9,7 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -34,6 +35,7 @@ public class BandaiScraperService {
     }
 
     // 📝 MÉTODO PRINCIPAL: Extração profunda com Galeria e Keywords
+    @Async
     public List<Card> scrapeOfficialSite() {
         System.out.println("🤖 [SISTEMA] A iniciar extração profunda em Modo Galeria...");
         Map<String, Card> cardMap = new HashMap<>();

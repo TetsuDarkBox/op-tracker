@@ -2,36 +2,49 @@ package com.optracker.api.controller;
 
 import com.optracker.api.entity.Card;
 import com.optracker.api.repository.CardRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/cards")
-@CrossOrigin(origins = "*") // Permite que o futuro Frontend comunique com o Backend
+@CrossOrigin(origins = "http://localhost:5173")
 public class CardController {
 
-    private final CardRepository cardRepository;
+    @Autowired
+    private CardRepository cardRepository;
 
-    public CardController(CardRepository cardRepository) {
-        this.cardRepository = cardRepository;
-    }
+    @GetMapping("/code/{code}")
+    public ResponseEntity<Map<String, Object>> getCardByCode(@PathVariable String code) {
+        return cardRepository.findByCode(code)
+                .map(card -> {
+                    Map<String, Object> response = new HashMap<>();
+                    response.put("code", card.getCode());
+                    response.put("name", card.getName());
+                    response.put("cost", card.getCost());
+                    response.put("power", card.getPower());
+                    response.put("attribute", card.getAttribute());
+                    response.put("effect", card.getEffect());
+                    response.put("color", card.getColor());
 
-    // 📝 MÉTODO: Devolve TODAS as cartas e as respetivas variantes (Cuidado, vai ser um ficheiro gigante!)
-    @GetMapping
-    public List<Card> getAllCards() {
-        return cardRepository.findAll();
-    }
+                    // Descobrir o Set ID para construir o caminho da pasta
+                    String setId = "Unknown";
+                    if (card.getVariants() != null && !card.getVariants().isEmpty()) {
+                        if (card.getVariants().get(0).getCardSet() != null) {
+                            setId = card.getVariants().get(0).getCardSet().getSetId();
+                        }
+                    }
 
-    // 📝 MÉTODO: Procura uma carta específica pelo seu Código exato (ex: OP01-001)
-    @GetMapping("/{code}")
-    public Card getCardByCode(@PathVariable String code) {
-        return cardRepository.findByCode(code).orElse(null);
-    }
+                    response.put("setId", setId);
+                    // Nome do ficheiro limpo (igual ao que o Downloader usou)
+                    String fileName = card.getCode().replaceAll("[\\\\/:*?\"<>|]", "-") + ".png";
+                    response.put("imageName", fileName);
 
-    // 📝 MÉTODO: Procura todas as cartas de um Set específico (ex: OP-01) usando a nova arquitetura
-    @GetMapping("/set/{setId}")
-    public List<Card> getCardsBySet(@PathVariable String setId) {
-        return cardRepository.findByVariantsCardSetSetId(setId); // 🆕 Atualizado!
+                    return ResponseEntity.ok(response);
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 }

@@ -1,7 +1,7 @@
 package com.optracker.api.service;
 
-import com.optracker.api.dto.LoginResponse; // Verifica se o pacote é minúsculo 'dto'
 import com.optracker.api.config.JwtService;
+import com.optracker.api.dto.LoginResponseDTO;
 import com.optracker.api.entity.*;
 import com.optracker.api.repository.UserRepository;
 import org.springframework.context.MessageSource;
@@ -17,7 +17,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final MessageSource messageSource;
     private final BCryptPasswordEncoder passwordEncoder;
-    private final JwtService jwtService; // <--- FALTAVA ESTA LINHA AQUI!
+    private final JwtService jwtService;
 
     public UserService(UserRepository userRepository,
                        MessageSource messageSource,
@@ -57,7 +57,7 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public LoginResponse authenticate(String username, String password) {
+    public LoginResponseDTO authenticate(String username, String password) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException(
                         messageSource.getMessage("user.not.found", null, LocaleContextHolder.getLocale())
@@ -69,8 +69,7 @@ public class UserService {
             );
         }
 
-        // O erro "Cannot resolve symbol" vai desaparecer agora:
         String token = jwtService.generateToken(user.getUsername());
-        return new LoginResponse(token, user.getUsername());
+        return new LoginResponseDTO(token, user.getUsername());
     }
 }

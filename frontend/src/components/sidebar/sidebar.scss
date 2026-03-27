@@ -1,0 +1,74 @@
+$sidebar-width: 280px;
+$primary-red: #ff4757;
+
+.sidebar-toggle {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 2000;
+  width: 50px;
+  height: 50px;
+  border-radius: 10px;
+  background: rgba(255, 47, 87, 0.9);
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  transition: 0.3s;
+
+  &.open { left: 230px; background: transparent; }
+  &:hover { transform: scale(1.1); }
+}
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: -#{$sidebar-width}; // Começa escondido à esquerda
+  width: $sidebar-width;
+  height: 100vh;
+  background: rgba(15, 15, 15, 0.95);
+  backdrop-filter: blur(15px);
+  z-index: 1500;
+  transition: 0.4s cubic-bezier(0.77, 0, 0.175, 1);
+  padding: 80px 20px;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+
+  &.open { left: 0; }
+
+  .sidebar-logo {
+    font-size: 28px;
+    font-weight: 900;
+    text-align: center;
+    margin-bottom: 50px;
+    span { color: $primary-red; }
+  }
+
+  .sidebar-nav {
+    .nav-item {
+      display: flex;
+      align-items: center;
+      padding: 15px;
+      margin-bottom: 10px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: 0.3s;
+      color: #ccc;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.05);
+        color: white;
+        .icon { transform: scale(1.2); }
+      }
+
+      .icon { font-size: 24px; margin-right: 20px; transition: 0.3s; }
+      .label { font-size: 18px; font-weight: 500; }
+    }
+  }
+}
+
+.sidebar-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+}
