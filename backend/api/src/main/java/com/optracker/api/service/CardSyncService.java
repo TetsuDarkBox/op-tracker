@@ -1,5 +1,6 @@
 package com.optracker.api.service;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.*;
@@ -14,36 +15,48 @@ import java.util.zip.ZipInputStream;
 public class CardSyncService {
 
     private static final String ZIP_URL = "https://github.com/buhbbl/punk-records/archive/refs/heads/main.zip";
-
-    // Caminho relativo (Funciona se o projeto for corrido na pasta 'backend/api')
     private static final String RELATIVE_PATH = "src/main/resources/data";
 
+    @Autowired
+    private BandaiScraperService bandaiScraperService;
+
+    @Autowired
+    private ImageDownloaderService imageDownloaderService;
+
+    // Método principal de Sincronização Global
     public void syncCards() {
-        System.out.println("🔄 A VERIFICAR ATUALIZAÇÕES DE CARTAS...");
+        System.out.println("🔄 A INICIAR SINCRONIZAÇÃO COMPLETA E INTELIGENTE DO SISTEMA...");
 
-        // Tenta descobrir o caminho absoluto correto
-        File dataDir = new File(RELATIVE_PATH).getAbsoluteFile();
-
-        System.out.println("📂 Pasta de Destino: " + dataDir.getAbsolutePath());
-
+        // 1. PRIMÁRIO: Scraping inteligente direto do site da Bandai
         try {
-            // 1. Limpeza (Opcional: Podes comentar isto se quiseres ser mais rápido e só substituir)
+            System.out.println("🏴‍☠️ [PASSO 1/3] A verificar e recolher dados oficiais da Bandai...");
+            bandaiScraperService.scrapeOfficialSite();
+        } catch (Exception e) {
+            System.err.println("🚨 Erro no scraping da Bandai: " + e.getMessage());
+        }
+
+        // 2. PRIMÁRIO: Download RÁPIDO das Imagens em falta no disco
+        try {
+            System.out.println("🖼️ [PASSO 2/3] A verificar e descarregar imagens/variantes em falta...");
+            imageDownloaderService.downloadMissingImagesOnly(); // 👈 Usamos o método otimizado!
+        } catch (Exception e) {
+            System.err.println("🚨 Erro no download das imagens: " + e.getMessage());
+        }
+
+        // 3. SECUNDÁRIO: Download de dados auxiliares/JSONs do GitHub (Punk-Records)
+        try {
+            System.out.println("⬇️ [PASSO 3/3] A atualizar cópia de segurança local do GitHub...");
+            File dataDir = new File(RELATIVE_PATH).getAbsoluteFile();
             if (dataDir.exists()) {
-                System.out.println("🧹 A limpar ficheiros antigos para garantir atualização total...");
                 deleteDirectory(dataDir.toPath());
             }
             dataDir.mkdirs();
-
-            // 2. Download e Extração
-            System.out.println("⬇️ A baixar dados do GitHub...");
             downloadAndExtract(ZIP_URL, dataDir);
-
-            System.out.println("✅ SINCRONIZAÇÃO CONCLUÍDA! As cartas estão atualizadas.");
-
         } catch (Exception e) {
-            System.err.println("❌ Falha na sincronização: " + e.getMessage());
-            System.err.println("⚠️ A aplicação vai tentar usar os ficheiros que já existirem.");
+            System.err.println("⚠️ Falha na sincronização secundária do GitHub (não afeta as imagens/BD): " + e.getMessage());
         }
+
+        System.out.println("✅ SINCRONIZAÇÃO E DOWNLOADS FINALIZADOS COM SUCESSO!");
     }
 
     private void downloadAndExtract(String urlStr, File destDir) throws IOException {
@@ -85,7 +98,7 @@ public class CardSyncService {
                     }
                 }
             }
-            System.out.println("📦 Extraídos " + count + " ficheiros.");
+            System.out.println("📦 Extraídos " + count + " ficheiros do GitHub.");
         }
     }
 

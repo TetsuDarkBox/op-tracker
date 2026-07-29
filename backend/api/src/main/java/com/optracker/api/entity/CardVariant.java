@@ -28,6 +28,10 @@ public class CardVariant {
     @JoinColumn(name = "set_id", nullable = false, foreignKey = @ForeignKey(name = "fk_cardvariant_cardset"))
     private CardSet cardSet;
 
+    @Lob
+    @Column(name = "image_data", columnDefinition = "LONGBLOB")
+    private byte[] imageData;
+
     public CardVariant() {}
 
     // --- GETTERS E SETTERS ---
@@ -52,4 +56,7 @@ public class CardVariant {
 
     public CardSet getCardSet() { return cardSet; }
     public void setCardSet(CardSet cardSet) { this.cardSet = cardSet; }
+
+    public byte[] getImageData() { return imageData; }
+    public void setImageData(byte[] imageData) { this.imageData = imageData; }
 }

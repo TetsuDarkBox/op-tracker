@@ -11,10 +11,9 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Service
 public class BandaiScraperService {
@@ -34,27 +33,71 @@ public class BandaiScraperService {
         SetInfo(String url, String name) { this.url = url; this.name = name; }
     }
 
-    // 📝 MÉTODO PRINCIPAL: Extração profunda com Galeria e Keywords
-    @Async
-    public List<Card> scrapeOfficialSite() {
-        System.out.println("🤖 [SISTEMA] A iniciar extração profunda em Modo Galeria...");
-        Map<String, Card> cardMap = new HashMap<>();
-        Map<String, SetInfo> setsToScrape = discoverNewSets();
+    public boolean hasData() {
+        return cardSetRepository.count() > 0;
+    }
 
-        if (setsToScrape.isEmpty()) {
-            System.out.println("✅ [INFO] Todos os Sets estão atualizados na Base de Dados.");
-            return new ArrayList<>();
+    @Async
+    @Transactional
+    public void scrapeOfficialSite() {
+        System.out.println("\n🤖 [SISTEMA] A mapear todos os Sets da Bandai...");
+
+        Map<String, SetInfo> allSets = discoverAllSets();
+
+        if (allSets.isEmpty()) {
+            System.out.println("⚠️ [INFO] Nenhum Set encontrado para processar.");
+            return;
         }
 
+        // 🔍 FASE 1: Descobrir o estado de cada Set (Quais estão prontos vs quais faltam)
+        List<String> completedSets = new ArrayList<>();
+        Map<String, SetInfo> setsNeedingUpdate = new LinkedHashMap<>();
+
+        for (Map.Entry<String, SetInfo> entry : allSets.entrySet()) {
+            String setIdKey = entry.getKey();
+            SetInfo info = entry.getValue();
+
+            Optional<CardSet> currentSetOpt = cardSetRepository.findBySetId(setIdKey);
+            if (currentSetOpt.isPresent()) {
+                CardSet currentSet = currentSetOpt.get();
+                // Verificação rápida se o set já existe e tem total de cartas preenchido
+                if (currentSet.getTotalCards() != null && currentSet.getTotalCards() > 0) {
+                    completedSets.add(info.name + " (" + setIdKey + ")");
+                    continue; // Adiciona aos completados e não coloca na lista de pendentes
+                }
+            }
+            setsNeedingUpdate.put(setIdKey, info);
+        }
+
+        // 📊 RELATÓRIO INICIAL DE IMPACTO
+        System.out.println("=================================================");
+        System.out.println("📊 STATUS DA BASE DE DADOS:");
+        System.out.println("✅ Sets já atualizados: " + completedSets.size() + "/" + allSets.size());
+        System.out.println("⏳ Sets que necessitam de extração/atualização: " + setsNeedingUpdate.size());
+        System.out.println("=================================================");
+
+        if (setsNeedingUpdate.isEmpty()) {
+            System.out.println("✨ Todos os Sets já estão 100% sincronizados!");
+            return;
+        }
+
+        System.out.println("\n🚀 A INICIAR EXTRAÇÃO DOS SETS PENDENTES:");
+        for (String setName : setsNeedingUpdate.values().stream().map(s -> s.name).toList()) {
+            System.out.println("   📌 Pendente: " + setName);
+        }
+        System.out.println("-------------------------------------------------\n");
+
+        // 🔄 FASE 2: Processar apenas os Sets que faltam
         int currentSetIndex = 1;
-        for (Map.Entry<String, SetInfo> entry : setsToScrape.entrySet()) {
+        int totalNewOrUpdatedCards = 0;
+
+        for (Map.Entry<String, SetInfo> entry : setsNeedingUpdate.entrySet()) {
             String setIdKey = entry.getKey();
             SetInfo info = entry.getValue();
 
             try {
-                System.out.println("🔎 [" + currentSetIndex + "/" + setsToScrape.size() + "] A processar Set: " + info.name);
+                System.out.println("⬇️ [" + currentSetIndex + "/" + setsNeedingUpdate.size() + "] A extrair Set: " + info.name + " (" + setIdKey + ")...");
 
-                // 1. Garantir existência do Set
                 CardSet currentSet = cardSetRepository.findBySetId(setIdKey).orElse(new CardSet());
                 currentSet.setSetId(setIdKey);
                 currentSet.setName(info.name);
@@ -64,11 +107,13 @@ public class BandaiScraperService {
                 Elements cardElements = doc.select(".resultCol .modalCol");
 
                 if (cardElements.isEmpty()) {
-                    System.out.println("⚠️  [AVISO] Nenhuma carta encontrada no Set: " + info.name);
+                    currentSetIndex++;
                     continue;
                 }
 
-                int cardsInThisSet = 0;
+                int cardsInThisSet = cardElements.size();
+                Map<String, Card> setCardMap = new HashMap<>();
+
                 for (Element cardHtml : cardElements) {
                     Elements infoSpans = cardHtml.select(".infoCol span");
                     if (infoSpans.isEmpty()) continue;
@@ -76,7 +121,6 @@ public class BandaiScraperService {
                     String code = infoSpans.get(0).text().trim();
                     if (code.isEmpty()) continue;
 
-                    // 2. Extração da Imagem
                     Element imgElement = cardHtml.selectFirst(".imgCol img");
                     if (imgElement == null) imgElement = cardHtml.selectFirst(".frontCol img");
 
@@ -85,55 +129,76 @@ public class BandaiScraperService {
                         imgSrc = imgElement.hasAttr("data-src") ? imgElement.absUrl("data-src") : imgElement.absUrl("src");
                     }
 
-                    // 3. Lógica de Card vs CardVariant (Acumular artes no mesmo Código)
-                    Card card = cardMap.get(code);
+                    if (imgSrc.isEmpty()) continue;
+
+                    Card card = setCardMap.get(code);
                     if (card == null) {
-                        card = cardRepository.findByCode(code).orElse(new Card());
+                        card = cardRepository.findByCodeWithVariants(code).orElse(new Card());
                         card.setCode(code);
-                        card.setRarity(infoSpans.size() >= 2 ? infoSpans.get(1).text().trim() : "");
-                        card.setType(infoSpans.size() >= 3 ? infoSpans.get(2).text().trim() : "");
 
-                        extractCardDetails(card, cardHtml);
-                        cardsInThisSet++;
+                        if (card.getName() == null || card.getEffect() == null || card.getCost() == null) {
+                            card.setRarity(infoSpans.size() >= 2 ? infoSpans.get(1).text().trim() : "");
+                            card.setType(infoSpans.size() >= 3 ? infoSpans.get(2).text().trim() : "");
+                            extractCardDetails(card, cardHtml);
+                            totalNewOrUpdatedCards++;
+                        }
                     }
 
-                    // 4. Criar Variante
-                    CardVariant variant = new CardVariant();
-                    variant.setCardSet(currentSet);
-                    variant.setImageUrl(imgSrc);
-                    variant.setLanguage("EN");
+                    final String finalImgSrc = imgSrc;
+                    boolean variantExists = card.getVariants().stream()
+                            .anyMatch(v -> v.getImageUrl() != null && v.getImageUrl().equalsIgnoreCase(finalImgSrc));
 
-                    if (imgSrc.contains("_p") || !card.getVariants().isEmpty()) {
-                        variant.setArtStyle("Parallel Art " + (card.getVariants().size()));
-                    } else {
-                        variant.setArtStyle("Normal Art");
+                    if (!variantExists) {
+                        CardVariant variant = new CardVariant();
+                        variant.setCardSet(currentSet);
+                        variant.setImageUrl(imgSrc);
+                        variant.setLanguage("EN");
+
+                        boolean isParallelUrl = imgSrc.contains("_p") || imgSrc.contains("_sp") || imgSrc.contains("_r");
+
+                        if (isParallelUrl) {
+                            long parallelCount = card.getVariants().stream()
+                                    .filter(v -> "Parallel Art".equalsIgnoreCase(v.getArtStyle()) || (v.getArtStyle() != null && v.getArtStyle().startsWith("Parallel Art")))
+                                    .count();
+                            variant.setArtStyle("Parallel Art " + (parallelCount + 1));
+                        } else {
+                            boolean hasNormal = card.getVariants().stream()
+                                    .anyMatch(v -> "Normal Art".equalsIgnoreCase(v.getArtStyle()));
+                            if (!hasNormal) {
+                                variant.setArtStyle("Normal Art");
+                            } else {
+                                variant.setArtStyle("Variant Art " + card.getVariants().size());
+                            }
+                        }
+
+                        card.addVariant(variant);
+                        totalNewOrUpdatedCards++;
                     }
 
-                    card.addVariant(variant);
-                    cardMap.put(code, card);
+                    setCardMap.put(code, card);
                 }
 
-                // Atualizar total e confirmar finalização do Set
+                cardRepository.saveAll(setCardMap.values());
+
                 currentSet.setTotalCards(cardsInThisSet);
                 cardSetRepository.save(currentSet);
-                System.out.println("✅ [" + currentSetIndex++ + "/" + setsToScrape.size() + "] Finalizado: " + info.name + " (" + cardsInThisSet + " cartas únicas)");
+                System.out.println("✅ [" + currentSetIndex++ + "/" + setsNeedingUpdate.size() + "] Concluído: " + info.name + " (" + cardsInThisSet + " cartas processadas)");
 
-                Thread.sleep(2000);
+                Thread.sleep(1000);
 
             } catch (Exception e) {
-                System.err.println("🚨 [ERRO CRÍTICO] Falha ao extrair Set " + info.name + ": " + e.getMessage());
+                System.err.println("🚨 [ERRO] Falha no Set " + info.name + ": " + e.getMessage());
+                currentSetIndex++;
             }
         }
 
-        printSummary(cardMap.size(), setsToScrape);
-        return new ArrayList<>(cardMap.values());
+        System.out.println("\n🎉 Extração concluída! Novas cartas/artes adicionadas: " + totalNewOrUpdatedCards + "\n");
     }
 
-    // 📝 MÉTODO: Descoberta de Sets com limpeza de HTML
-    private Map<String, SetInfo> discoverNewSets() {
-        Map<String, SetInfo> newUrls = new HashMap<>();
+    private Map<String, SetInfo> discoverAllSets() {
+        Map<String, SetInfo> allUrls = new LinkedHashMap<>();
         try {
-            Document doc = Jsoup.connect(BASE_URL).userAgent("Mozilla/5.0").get();
+            Document doc = Jsoup.connect(BASE_URL).userAgent("Mozilla/5.0").timeout(20000).get();
             Elements options = doc.select("select[name=series] option");
 
             for (Element option : options) {
@@ -157,24 +222,20 @@ public class BandaiScraperService {
                     }
 
                     if (extractedSetId != null) {
-                        if (!cardSetRepository.existsBySetId(extractedSetId)) {
-                            newUrls.put(extractedSetId, new SetInfo(url, extractedSetName));
-                        }
+                        allUrls.put(extractedSetId, new SetInfo(url, extractedSetName));
                     }
                 }
             }
         } catch (Exception e) {
             System.err.println("🚨 [ERRO] Falha ao mapear lista de Sets: " + e.getMessage());
         }
-        return newUrls;
+        return allUrls;
     }
 
-    private void extractCardDetails(Card card, org.jsoup.nodes.Element cardHtml) {
-        // 1. EXTRAÇÃO DO NOME
-        org.jsoup.nodes.Element nameElement = cardHtml.selectFirst(".cardName");
+    private void extractCardDetails(Card card, Element cardHtml) {
+        Element nameElement = cardHtml.selectFirst(".cardName");
         if (nameElement != null) card.setName(nameElement.text().trim());
 
-        // 2. EXTRAÇÃO DE CAMPOS SIMPLES (TEXTO)
         card.setCost(getValueByH3(cardHtml, "Cost"));
         card.setLife(getValueByH3(cardHtml, "Life"));
         card.setPower(getValueByH3(cardHtml, "Power"));
@@ -183,35 +244,30 @@ public class BandaiScraperService {
         card.setAttribute(getValueByH3(cardHtml, "Attribute"));
         card.setSubTypes(getValueByH3(cardHtml, "Type"));
 
-        // 3. EXTRAÇÃO DE EFEITOS (TEXTO)
         String trigger = getValueByH3(cardHtml, "Trigger");
         card.setTriggerEffect(trigger);
 
         String effect = getValueByH3(cardHtml, "Effect");
         card.setEffect(effect);
 
-        // 4. EXTRAÇÃO DE ÍCONES (IMAGENS ESPECÍFICAS)
-        org.jsoup.nodes.Element attrImg = cardHtml.selectFirst(".attribute img");
-        if (attrImg != null) {
-            card.setAttributeIconUrl(attrImg.absUrl("src"));
-        }
+        Element attrImg = cardHtml.selectFirst(".attribute img");
+        if (attrImg != null) card.setAttributeIconUrl(attrImg.absUrl("src"));
 
-        org.jsoup.nodes.Element blockImg = cardHtml.selectFirst(".block img");
-        if (blockImg != null) {
-            card.setBlockIconUrl(blockImg.absUrl("src"));
-        }
+        Element colorImg = cardHtml.selectFirst(".color img");
+        if (colorImg != null) card.setColorIconUrl(colorImg.absUrl("src"));
 
-        // Número do Bloco em texto
-        org.jsoup.nodes.Element blockDiv = cardHtml.selectFirst(".block");
+        Element blockImg = cardHtml.selectFirst(".block img");
+        if (blockImg != null) card.setBlockIconUrl(blockImg.absUrl("src"));
+
+        Element blockDiv = cardHtml.selectFirst(".block");
         if (blockDiv != null) {
-            org.jsoup.nodes.Element blockClone = blockDiv.clone();
+            Element blockClone = blockDiv.clone();
             blockClone.select("h3").remove();
             String bNum = blockClone.text().trim();
-            if (!bNum.isEmpty()) card.setBlockNumber(bNum); // Agora já existe no Card.java!
+            if (!bNum.isEmpty()) card.setBlockNumber(bNum);
         }
 
-        // 5. SCANNER DE KEYWORDS
-        java.util.Set<String> keywordsSet = new java.util.LinkedHashSet<>();
+        Set<String> keywordsSet = new LinkedHashSet<>();
         String fullText = (effect != null ? effect : "") + " " + (trigger != null ? trigger : "");
 
         if (fullText.contains("[")) {
@@ -242,15 +298,5 @@ public class BandaiScraperService {
             }
         }
         return null;
-    }
-
-    private void printSummary(int totalCards, Map<String, SetInfo> processedSets) {
-        System.out.println("\n=================================================");
-        System.out.println("🏴‍☠️ [RELATÓRIO FINAL DE EXTRAÇÃO] 🏴‍☠️");
-        System.out.println("=================================================");
-        System.out.println("📦 Cartas Únicas: " + totalCards);
-        System.out.println("🗺️  Sets Adicionados: " + processedSets.size());
-        System.out.println("📸 Galeria: Todas as variantes de imagem guardadas.");
-        System.out.println("=================================================\n");
     }
 }
